@@ -1,0 +1,12 @@
+{
+  "name": "intellectual-collaboration",
+  "version": "1.0.0",
+  "description": "Intellectual Collaboration Application",
+  "main": "index.js",
+  "dependencies": {
+    "aws-amplify": "^5.3.11"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

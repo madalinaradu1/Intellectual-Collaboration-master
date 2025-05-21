@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MFA Setup - IC CMS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    #qrcode {
+      display: block;
+      margin: 20px auto;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="container d-flex justify-content-center align-items-center vh-100">
+    <div class="card shadow p-4" style="max-width: 500px; width: 100%;">
+      <h3 class="text-center mb-3">Multi-Factor Authentication (MFA)</h3>
+      <p class="text-center">Scan the QR code below using Google Authenticator or Authy.</p>
+      <canvas id="qrcode" width="200" height="200"></canvas>
+      <div class="mb-3">
+        <label for="totp-code" class="form-label">Enter 6-digit code from app:</label>
+        <input type="text" id="totp-code" class="form-control" placeholder="123456" required />
+      </div>
+      <button class="btn btn-primary w-100" onclick="verifyMFA()">Verify</button>
+      <div id="mfa-status" class="text-center mt-3"></div>
+    </div>
+  </div>
+
+  <!-- jQuery and Dependencies -->
+  <script src="jquery-3.1.0.js"></script>
+  <script src="qrcode.min.js"></script>
+  
+  <!-- AWS Amplify -->
+  <script src="https://unpkg.com/aws-amplify@5.0.4/dist/aws-amplify.min.js"></script>
+  
+  <!-- Configuration -->
+  <script src="config.js"></script>
+  <script src="amplify-config.js"></script>
+
+  <script>
+    // Initialize Amplify
+    Amplify.configure(window.awsConfig);
+    
+    let user;
+
+    async function loadQRCode() {
+      try {
+        // Get current authenticated user
+        user = await Amplify.Auth.currentAuthenticatedUser();
+        
+        if (!user) {
+          window.location.href = 'signin.html';
+          return;
+        }
+        
+        // Setup TOTP
+        const totpSetup = await Amplify.Auth.setupTOTP(user);
+        const secretCode = totpSetup;
+        const username = user.username;
+        const otpUri = `otpauth://totp/ICCMS:${username}?secret=${secretCode}&issuer=ICCMS`;
+        
+        // Generate QR code
+        QRCode.toCanvas(document.getElementById('qrcode'), otpUri, function(err) {
+          if (err) $('#mfa-status').text("❌ Error generating QR code.");
+        });
+      } catch (error) {
+        console.error('Error setting up MFA:', error);
+        $('#mfa-status').text("❌ Failed to set up MFA: " + error.message);
+        
+        // Redirect to sign in if not authenticated
+        if (error.code === 'NotAuthorizedException') {
+          window.location.href = 'signin.html';
+        }
+      }
+    }
+
+    async function verifyMFA() {
+      const code = $('#totp-code').val().trim();
+
+      if (!code) {
+        $('#mfa-status').text("❌ Please enter a valid code.");
+        return;
+      }
+
+      try {
+        // Verify TOTP token
+        await Amplify.Auth.verifyTotpToken(user, code);
+        
+        // Set preferred MFA method
+        await Amplify.Auth.setPreferredMFA(user, 'TOTP');
+        
+        $('#mfa-status').text("✅ MFA setup complete! Redirecting...");
+        setTimeout(() => window.location.href = "index.html", 1500);
+      } catch (error) {
+        console.error('Error verifying MFA:', error);
+        $('#mfa-status').text("❌ Invalid MFA code: " + error.message);
+      }
+    }
+
+    $(document).ready(loadQRCode);
+  </script>
+</body>
+</html>
